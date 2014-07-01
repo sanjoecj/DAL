@@ -1,639 +1,201 @@
-package com.amex.base;
-
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.Properties;
-import com.amex.utils.Constants;
-import com.amex.utils.ExcelReader;
-import com.amex.utils.FileReader;
-
-public class TestBase {
-	protected ExcelReader reader;
-	protected Properties config;
-
-	public void initialize() throws IOException{
-		config = new Properties();
-		FileInputStream ip = new FileInputStream(System.getProperty("user.dir")+Constants.REQUEST_PROP_PATH);
-		config.load(ip);	
-
-		reader = FileReader.getExcelReader(System.getProperty("user.dir")+Constants.TESTDATA_PATH);
-	}
-
-
-
-}
-
---------------------------------------------------------------------------------------------
-request.properties
-
-<!--Com.amex.config-->
-SumCountReqSce1={ "startDt": "_startDt","endDt": "_endDt","seNbrList": ["_seNbrList1"]}
---------------------------------------------------------------------------------------------
-<!-- Error Codes and Error Description -->
-<!--Error Name 	Error Code 	Error Description 	Http Response Code-->
-<!--com.amex.errorhandles-->
-
-NoSEPresent=1001,EITHER GUID OR SE NO. MUST BE PROVIDED,400
-InvalidGuid=1002,INVALID GUID,400
-InvalidFlag=1003,INVALID FLAG,400
-BadDate=1004,INVALID/UNPARSEABLE DATE,400
-InvalidSeNumber=1005,INVALID SE NUMBER,400
-EmptyListInput=1006,EMPTY LIST OR INVALID LIST ELEMENTS,400
-StartDateIssue=1007,START DATE CAN NOT BE GREATER THAN END DATE,400
-FutureStartDate=1008,START DATE CAN NOT BE GREATER THAN CURRENT DATE,400
-InvalidDisputeId=1009,INVALID DISPUTE ID,400
-InvalidDateFormat=1010,INVALID DATE FORMAT,400
-DPFailure=1011,DATA POWER CALL FAILED,499
-DPMappingFailure=1012,EMPTY RESPONSE,499
-MerchantCommentsExceed=1013,Merchant Comment Should not exceed 1500 Characters,400
-KeyIdBlank=1014,Dispute Id should not be blank,400
-LanguageBlank=1015,Language should not be blank,400
-DisputeTypeBlank=1016,Dispute Type should not be blank,400
-DocTypeBlank=1017,Document Type should not be blank,400
-RefundTypeBlank=1018,Refund Type should not be blank,400
-ResponseCodeBlank=1019,Response Code should not be blank,400
-RefundamountBlank=1020,Refund Amount should not be blank,400
-RefundCurrencyBlank=1021,Refund Currency should not be blank,400
-MerchantInitialBlank=1022,Merchant Initial should not be blank,400
-MerchantInitialInvalid=1023,Merchant Initial should not exceed 3 character,400
-InvalidResponseType=1024,INVALID RESPONSE TYPE,400
-GuidOrSENotPresent=1025,GUID or SE not provided,400
-FlaggedHiddenBlank=1026,Flagged and Hidden both cannot be left blank,400
-FlaggedHiddenUpdateFailed=1027,Flagged and Hidden both cannot be updated in single request,400
-DisputeIDBlank=1028,Dispute ids cannot be blank or null,400
-DisputeIDsLimitCrossed=1029,Only 50 Dispute Cases are allowed in a single request,400
-InvalidDisputeIdAndDisputeType=1030,DisputeId and DisputeType Combination is Invalid,400
-InvalidInputData=1031,Invalid Input Data,400
-GenericServiceError=1032,Error has been encountered,400
---------------------------------------------------------------------------------------------
-com.amex.testdata.API_Details.xlsx
-TCID	API	Header_Key	Header_Value	Request_Name	Request_Param	Expected_Response_Code
-TC_001	/disputes-web/disputes/v1/summarycount	sm_universalid	399b7e9b0ee11f67f1595aa29011933b	SumCountReqSce1	"_startDt:2013-05-14,
-_endDt:2014-05-14,
-_seNbrList1:6993620004"	200
-
---------------------------------------------------------------------------------------------
-package com.amex.testsamples;
-
-import java.io.IOException;
-import java.util.HashMap;
-
-import com.amex.base.TestBase;
-import com.amex.utils.Constants;
-
-public class TestClass extends TestBase {
-
-	public static void main(String[] args) throws IOException {
-		TestClass test = new TestClass();
-		test.initialize();
-		test.test();
-	}
-
-	public void test() {
-		//System.out.println(reader.getRowCount(Constants.SHEET_NAME));
-
-		for(int i=2;i<=reader.getRowCount(Constants.SHEET_NAME);i++){
-			System.out.println(i);
-			HashMap<String,String> values = reader.getRowData(Constants.SHEET_NAME, i);
-
-			String requestURL =Constants.URL+values.get(Constants.COLUMN_API);;
-			String headerKey= values.get(Constants.COLUMN_HEADER_KEY);
-			String headerValue= values.get(Constants.COLUMN_HEADER_VALUE);
-			String requestName= values.get(Constants.COLUMN_REQUEST_NAME);
-			String requestParam= values.get(Constants.COLUMN_REQUEST_PARAM);
-			String requestCode= values.get(Constants.COLUMN_RESPONSE_CODE);
-			
-			getValidRequest(requestName,requestParam);
-
-		}
-	}
-
-	private String getRequestSchema(String requestName){
-		return config.getProperty(requestName);
-	}
-
-	public void getValidRequest(String requestName, String params){
-		String request = getRequestSchema(requestName);
-		HashMap<String, String> paramsMap = getRequestParamsMap(params);
-		
-		format(request,paramsMap);
-
-	}
-	
-	public HashMap<String, String> getRequestParamsMap(String params) {
-		HashMap<String, String> paramsMap = new HashMap<String, String>();
-		String[] paramSet = params.split(",");
-		for(int i=0;i<paramSet.length;i++){
-			String[] param = paramSet[i].split(":");
-			paramsMap.put(param[0], param[1]);
-		}
-		return paramsMap;
-	}
-
-	private void format(String request, HashMap<String, String> paramsMap) {
-		System.out.println(request);
-		
-		System.out.println(paramsMap);
-		
-	}
-
-}
-
---------------------------------------------------------------------------------------------
-package com.amex.utils;
-
-public class Constants {
-
-	public static final String URL = "https://dwww420.app.aexp.com";
-	public static final String REQUEST_PROP_PATH = "\\src\\com\\amex\\config\\Request.properties";
-	public static final String SHEET_NAME = "Sheet1";
-	public static final String TESTDATA_PATH = "\\src\\com\\amex\\testdata\\API_Details.xlsx";
-	public static final String COLUMN_API = "API";
-	public static final String COLUMN_HEADER_KEY="Header_Key";
-	public static final String COLUMN_HEADER_VALUE="Header_Value";
-	public static final String COLUMN_REQUEST_NAME="Request_Name";
-	public static final String COLUMN_REQUEST_PARAM="Request_Param";
-	public static final String COLUMN_RESPONSE_CODE="Expected_Response_Code";
-}
-
---------------------------------------------------------------------------------------------
-package com.amex.utils;
-
-import java.io.FileInputStream;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.DateUtil;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
-import ch.qos.logback.core.joran.spi.JoranException;
-
-public class ExcelReader  {
-	
-	
-	private FileInputStream fis = null;
-	private Workbook workbook = null;
-	private Sheet sheet = null;
-	private Row row = null;
-	private Cell cell = null;
-	//public static final Logger logger = LoggerFactory.getLogger(ExcelReader.class);
-	private static volatile ExcelReader instance = null;
-	private static volatile Map<String,ExcelReader> excelReaderMap = new HashMap<String, ExcelReader>();
-	
-	public ExcelReader(String path) {	
-		
-//		LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
-		try {
-//			JoranConfigurator configurator = new JoranConfigurator();
-//		    configurator.setContext(context);		    
-//		    context.reset(); 
-//		    configurator.doConfigure(getClass().getResource(Utils.CONFIG_FILENAME));   
-//		    configurator.doConfigure(System.getProperty("config_path"));
-		    //logger.info(" Reading the Excel file");
-			fis = new FileInputStream(path);
-			this.workbook = WorkbookFactory.create(fis);
-			fis.close();
-		} catch (JoranException je) {
-			//logger.error(je.getMessage());
-			} catch (Exception e) {
-			//logger.error(e.getMessage());
-		}
-	}
-	
-	// creating singleton Object for each excelFile
-	public static ExcelReader getInstance(String excelFilePath) {
-		if (instance == null || !excelReaderMap.containsKey(excelFilePath)) {
-			synchronized (ExcelReader.class) {
-				if (instance == null || !excelReaderMap.containsKey(excelFilePath)) {
-					instance = new ExcelReader(excelFilePath);
-					excelReaderMap.put(excelFilePath, instance);
-				}
-			}
-		}		
-		return excelReaderMap.get(excelFilePath);
-	}
-	
-	
-	// returns the row count in a sheet
-	public int getRowCount(String sheetName) {
-		//logger.info(" inside getRowCount() method");
-		int index = workbook.getSheetIndex(sheetName);
-		if (index == -1)
-			return 0;
-		else {
-			sheet = workbook.getSheetAt(index);
-			int number = sheet.getLastRowNum() + 1;
-			return number;
-		}
-
-	}
-	
-	// returns the columnData in a sheet with colNum
-	public List<String> getColumnData(String sheetName, int colNum) {
-		//logger.info(" inside getColumnData() method");
-
-		List<String> list = null;
-		try {
-
-			list = new ArrayList<String>();
-			int index = workbook.getSheetIndex(sheetName);
-			if (index == -1) return list;
-			
-			sheet = workbook.getSheetAt(index);
-			list = this.getEntireColumnCellValues(sheet, colNum);
-			return list;
-
-		} catch (Exception e) {
-			if (e.getMessage() != null && e.getMessage().isEmpty()) {
-				//logger.error(e.getMessage());
-			} else {
-				//logger.error(" column " + colNum + " does not exist in file");
-			}
-			return list;
-		}
-
-	}
-	
-	// returns the columnData in a sheet with colName
-	public List<String> getColumnData(String sheetName, String colName) {
-		//logger.info(" inside getColumnData() method");
-		List<String> list = null;
-		try {
-
-			list = new ArrayList<String>();
-			int index = workbook.getSheetIndex(sheetName);
-			if (index == -1) return list;
-			
-			sheet = workbook.getSheetAt(index);
-			row = sheet.getRow(0);
-			if (row == null) return list;
-			
-			int colNum = 0;
-			for (int i = 0; i < row.getLastCellNum(); i++) {
-				if (row.getCell(i).getStringCellValue().trim()
-						.equals(colName.trim())){
-					colNum = i;
-				}					
-			}			
-			if (colNum == -1) return list;	
-			
-			list = this.getEntireColumnCellValues(sheet,colNum);
-			return list;
-
-		} catch (Exception e) {
-			if(e.getMessage() != null && e.getMessage().isEmpty()){
-				//logger.error(e.getMessage());
-			} else{
-				//logger.error(" column " + colName + " does not exist in file");
-			}	
-			return list;
-		}
-	}
-
-
-	// returns the data from a cell
-	public String getCellData(String sheetName, String colName, int rowNum) {
-		//logger.info(" inside getCellData() method");
-		try {
-			if (rowNum <= 0) return "";
-
-			int index = workbook.getSheetIndex(sheetName);
-			int col_Num = -1;
-			if (index == -1) return "";
-
-			sheet = workbook.getSheetAt(index);
-			row = sheet.getRow(0);
-			for (int i = 0; i < row.getLastCellNum(); i++) {
-				if (row.getCell(i).getStringCellValue().trim()
-						.equals(colName.trim()))
-					col_Num = i;
-			}
-			if (col_Num == -1) return "";
-
-			sheet = workbook.getSheetAt(index);
-			row = sheet.getRow(rowNum - 1);
-			if (row == null) return "";
-			
-			cell = row.getCell(col_Num);
-			return this.getCellValue(cell);
-			
-		} catch (Exception e) {
-			if(e.getMessage() != null && e.getMessage().isEmpty()){
-				//logger.error(e.getMessage());
-			} else{
-				//logger.error("row " + rowNum + " or column " + colName + " does not exist in file");
-			}
-			return "row " + rowNum + " or column " + colName + " does not exist in file";
-		}
-	}
-
-	// returns the data from a cell
-	public String getCellData(String sheetName, int colNum, int rowNum) {
-		//logger.info(" inside getCellData() method");
-		try {
-			if (rowNum <= 0) return "";
-
-			int index = workbook.getSheetIndex(sheetName);
-
-			if (index == -1) return "";
-
-			sheet = workbook.getSheetAt(index);
-			row = sheet.getRow(rowNum - 1);
-			if (row == null) return "";
-			
-			cell = row.getCell(colNum);
-			
-			return this.getCellValue(cell);
-			
-		} catch (Exception e) {
-			if(e.getMessage() != null && e.getMessage().isEmpty()){
-				//logger.error(e.getMessage());
-			} else{
-				//logger.error("row " + rowNum + " or column " + colNum + " does not exist  in file");
-			}
-			return "row " + rowNum + " or column " + colNum + " does not exist  in file";
-		}
-	}
-
-	// find whether sheets exists
-	public boolean isSheetExist(String sheetName) {
-		
-		//logger.info(" inside isSheetExist() method");
-		int index = workbook.getSheetIndex(sheetName);
-		if (index == -1) {
-			index = workbook.getSheetIndex(sheetName.toUpperCase());
-			if (index == -1) return false;
-			else
-				return true;
-		} else
-			return true;
-	}
-
-	// returns number of columns in a sheet
-	public int getColumnCount(String sheetName) {
-		
-		//logger.info(" inside getColumnCount() method");
-		if (!isSheetExist(sheetName)) return -1;
-
-		sheet = workbook.getSheet(sheetName);
-		row = sheet.getRow(0);
-
-		if (row == null) return -1;
-
-		return row.getLastCellNum();
-
-	}
-
-	//returns row number
-	public int getCellRowNum(String sheetName, String colName, String cellValue) {
-		//logger.info(" inside getCellRowNum() method");
-
-		for (int i = 2; i <= getRowCount(sheetName); i++) {
-			if (getCellData(sheetName, colName, i).equalsIgnoreCase(cellValue)) {
-				return i;
-			}
-		}
-		return -1;
-
-	}
-
-	// returns Row data in a sheet
-	public HashMap<String, String> getRowData(String sheetName, int rowNum) {
-		
-		//logger.info(" inside getRowData() method");
-		HashMap<String, String> hashMap = null;
-		try {
-			
-			hashMap = new HashMap<String, String>();			
-			if (rowNum <= 0) return hashMap;
-
-			int index = workbook.getSheetIndex(sheetName);			
-			if (index == -1) return hashMap;
-
-			sheet = workbook.getSheetAt(index);
-			row = sheet.getRow(rowNum - 1);
-			Row headerRow = sheet.getRow(0);
-			
-			if (headerRow == null || row == null) return hashMap;
-			
-			for (int i = 0; i < headerRow.getLastCellNum(); i++) {
-				hashMap.put(this.getCellValue(headerRow.getCell(i)), this.getCellValue(row.getCell(i)));				
-			}
-			return hashMap;
-			
-		} catch (Exception e) {
-			if(e.getMessage() != null && e.getMessage().isEmpty()){
-				//logger.error(e.getMessage());
-			} else{
-				//logger.error("row " + rowNum + " does not exist  in file");
-			}
-			return hashMap;
-		}
-	}
-	
-	// get the cell data as string.
-	private String getCellValue(Cell cell){
-		
-		if (cell == null)
-			return "";
-		if (cell.getCellType() == Cell.CELL_TYPE_STRING)
-			return cell.getStringCellValue();
-		else if (cell.getCellType() == Cell.CELL_TYPE_NUMERIC
-				|| cell.getCellType() == Cell.CELL_TYPE_FORMULA) {
-
-			String cellText = String.valueOf(cell.getNumericCellValue());
-			if (DateUtil.isCellDateFormatted(cell)) {
-				// format in form of M/D/YY
-				double d = cell.getNumericCellValue();
-
-				Calendar cal = Calendar.getInstance();
-				cal.setTime(DateUtil.getJavaDate(d));
-				cellText = (String.valueOf(cal.get(Calendar.YEAR)))
-						.substring(2);
-				cellText = cal.get(Calendar.DAY_OF_MONTH) + "/"
-						+ cal.get(Calendar.MONTH) + 1 + "/" + cellText;
-
-			}
-			return cellText;
-		} else if (cell.getCellType() == Cell.CELL_TYPE_BLANK)
-			return "";
-		else
-			return String.valueOf(cell.getBooleanCellValue());
-		
-	}
-
-	// get entire column cell data as a list	
-	private List<String> getEntireColumnCellValues(Sheet sheet, int colNum){
-		
-		List<String> list = new ArrayList<String>();
-		for (Row row : sheet) {
-			if (row.getRowNum() != 0) {
-				cell = row.getCell(colNum);
-				if (cell != null) {
-					if (cell.getCellType() == Cell.CELL_TYPE_STRING)
-						list.add(cell.getStringCellValue());
-					else if (cell.getCellType() == Cell.CELL_TYPE_NUMERIC
-							|| cell.getCellType() == Cell.CELL_TYPE_FORMULA) {
-
-						String cellText = String.valueOf(cell
-								.getNumericCellValue());
-						if (DateUtil.isCellDateFormatted(cell)) {
-							// format in form of M/D/YY
-							double d = cell.getNumericCellValue();
-
-							Calendar cal = Calendar.getInstance();
-							cal.setTime(DateUtil.getJavaDate(d));
-							cellText = (String.valueOf(cal
-									.get(Calendar.YEAR))).substring(2);
-							cellText = cal.get(Calendar.MONTH) + 1 + "/"
-									+ cal.get(Calendar.DAY_OF_MONTH) + "/"
-									+ cellText;
-						}
-
-						list.add(cellText);
-					} else if (cell.getCellType() == Cell.CELL_TYPE_BLANK)
-						list.add("");
-					else
-						list.add(String.valueOf(cell.getBooleanCellValue()));
-				}
-			}
-		}		
-		return list;		
-	}
-	
-}
-
---------------------------------------------------------------------------------------------
-package com.amex.utils;
-
-
-public class FileReader {
-
-	public static ExcelReader getExcelReader(String excelFilePath) {
-
-		if (excelFilePath == null) {
-			return null;
-		} else {
-			return ExcelReader.getInstance(excelFilePath);
-		}
-	}
-
-}
------------------------------------------------------
-dom4j-1.6.1.jar
-log4j.jar
-logback-classic-0.9.29.jar
-logback-core-0.9.29.jar
-ooxml-schemas-1.0.jar
-poi-3.8-sources.jar
-poi-3.8.jar
-poi-ooxml-3.5-beta5.jar
-slf4j-api-1.7.6-sources.jar
-slf4j-api-1.7.6.jar
-slf4j-simple-1.7.6.jar
-xmlbeans-2.3.0.jar
-=============================================================
-
-package com.amex.testsamples;
+package com.amex.main;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.amex.base.TestBase;
 import com.amex.utils.Constants;
+import com.amex.utils.FileUtil;
 import com.jayway.restassured.RestAssured;
 import com.jayway.restassured.path.json.JsonPath;
 import com.jayway.restassured.response.Response;
 
 public class DriverScript extends TestBase {
-	private String requestURL;			
+	private String requestURL;
 	private String headerKey;
 	private String headerValue;
 	private String requestName;
 	private String requestParam;
 	private String expectedResponseCode;
-	private String request;
-	private String contentType;	
+	private String requestBody;
+	private String contentType;
 	private String requestMethod;
 	private String responseKeySet;
 	private String errorName;
+	private String tcid;
+	private String fileoutpath;
 
-	public static void main(String[] args) throws IOException {
-		DriverScript driver = new DriverScript();
-		driver.load();
-		driver.invoke();
-	}
+	private int currentTestcase;
+	private boolean testFailed = false;
+	private String urlParameters;
+	private static Logger logger = LoggerFactory.getLogger(DriverScript.class);
 
-	public void invoke() {
-		for (int i = 2; i <= reader.getRowCount(Constants.SHEET_NAME); i++) {
-			HashMap<String, String> values = reader.getRowData(Constants.SHEET_NAME, i);
-			initialize(values);
-			Response response = getResponse();
-			// To-DO write request and response to a file by creating a folder+timestamp,file+TCID.			
-			validateResponse(response);
+
+	/**
+	 * This method is the main method that starts the execution.
+	 * 
+	 * @throws IOException
+	 */
+	public void run() throws IOException {
+		clearResults();
+		logger.info("Test Execution started.");
+
+		for (currentTestcase = 2; currentTestcase <= reader.getRowCount(Constants.SHEET_NAME); currentTestcase++) {
+			HashMap<String, String> rowData = reader.getRowData(Constants.SHEET_NAME, currentTestcase);
+			String runMode = rowData.get(Constants.COLUMN_RUN_MODE).trim();
+			tcid = rowData.get(Constants.COLUMN_TCID).trim();
+
+			if (runMode.equalsIgnoreCase("YES")) {
+				// Initialize all the values from test data sheet
+				initialize(rowData);
+				replaceURLParameters(urlParameters);				
+				
+				Response response = getResponse();
+				
+				if (response != null) {
+					FileUtil.createFile(fileoutpath, tcid + "_Response.txt", response.asString());
+					validateResponse(response);
+
+					// Updating the pass result only if there is no failure
+					if (!testFailed) {
+						testPassed();
+					}
+				}
+			} else {
+				logger.info("Test Skipped : " + tcid);
+				testSkipped();
+			}
 		}
+	}	
+
+
+	/**
+	 * The method clears all the previous test results from the test data sheet.
+	 */
+	private void clearResults() {
+		logger.info("Clearing all the Test results from Excel sheet");
+		for (currentTestcase = 2; currentTestcase <= reader.getRowCount(Constants.SHEET_NAME); currentTestcase++) {
+			reader.setCellData(Constants.SHEET_NAME, Constants.COLUMN_FAILURE_CAUSE, currentTestcase, "");
+		}
+		testFailed = false;
 	}
 
 
-	private void initialize(HashMap<String, String> values) {		
-		requestURL 			 = Constants.URL+ values.get(Constants.COLUMN_API).trim();			
-		headerKey 			 = values.get(Constants.COLUMN_HEADER_KEY).trim();
-		headerValue			 = values.get(Constants.COLUMN_HEADER_VALUE).trim();
-		requestName          = values.get(Constants.COLUMN_REQUEST_NAME).trim();
-		requestParam         = values.get(Constants.COLUMN_REQUEST_PARAM).trim();
-		expectedResponseCode = values.get(Constants.COLUMN_RESPONSE_CODE).trim();
-		requestMethod        = values.get(Constants.COLUMN_REQUEST_METHOD).trim();			
+	/**
+	 * Initialize all the required parameters for a web service call.
+	 * 
+	 * @param rowData
+	 */
+	private void initialize(HashMap<String, String> rowData) {
+		requestURL           = Constants.URL + rowData.get(Constants.COLUMN_API).trim();
+		headerKey            = rowData.get(Constants.COLUMN_HEADER_KEY).trim();
+		headerValue          = rowData.get(Constants.COLUMN_HEADER_VALUE).trim();
+		requestName          = rowData.get(Constants.COLUMN_REQUEST_NAME).trim();
+		requestParam         = rowData.get(Constants.COLUMN_REQUEST_PARAM).trim();
+		expectedResponseCode = rowData.get(Constants.COLUMN_RESPONSE_CODE).trim();
+		requestMethod        = rowData.get(Constants.COLUMN_REQUEST_METHOD).trim();
 		contentType          = Constants.CONTENT_TYPE_JSON;
-		request              = generateValidRequest(requestName, requestParam);
-		errorName            = values.get(Constants.COLUMN_ERROR_NAME).trim();
-		responseKeySet       = values.get(Constants.COLUMN_RESPONSE_KEY).trim();
+		requestBody          = generateValidRequestBody(requestName, requestParam);
+		errorName            = rowData.get(Constants.COLUMN_ERROR_NAME).trim();
+		responseKeySet       = rowData.get(Constants.COLUMN_RESPONSE_KEY).trim();
+		fileoutpath	         = getFileOutPath(currentTimeStamp);
+		urlParameters        = rowData.get(Constants.COLUMN_URL_PARAMETERS);
 	}
 
+
+	/**
+	 * Call the web service and get the response.
+	 * 
+	 * @return
+	 */
 	private Response getResponse() {
 		Response response = null;
 		RestAssured.useRelaxedHTTPSValidation();
-		if(requestMethod.equalsIgnoreCase("POST")){
-			response = RestAssured.given().headers(headerKey, headerValue)
-			.body(request).contentType(contentType).post(requestURL)
-			.andReturn();
-		}else if (requestMethod.equalsIgnoreCase("GET")) {
-			// To-Do
+		try {
+
+			if (requestMethod.equalsIgnoreCase("POST")) {
+				// Call POST service
+				FileUtil.createFile(fileoutpath, tcid + "_Request.txt", requestBody);
+				response = RestAssured.given().headers(headerKey, headerValue)
+				.body(requestBody).contentType(contentType)
+				.post(requestURL).andReturn();
+			} else if (requestMethod.equalsIgnoreCase("GET")) {
+				// Call GET service
+				response = RestAssured.given().headers(headerKey, headerValue)
+				.contentType(contentType).get(requestURL).andReturn();
+			}
+		} catch (Exception exception) {
+			testFailed(exception.getLocalizedMessage());
+			logger.info(exception.getMessage(), exception);
+
 		}
 		return response;
-
 	}
 
+
+	/**
+	 * Check the HTTP response status code and validate the reponse. If 200 OK,
+	 * assert the response with the values from DB If 400, 499, assert the error
+	 * details in the response body with values in the ErrorCodes.properties
+	 * file.
+	 * 
+	 * @param response
+	 */
 	private void validateResponse(Response response) {
-		int responseCode=response.getStatusCode();		
-		int eResponseCode=(int) Float.parseFloat(expectedResponseCode);		
-		if(responseCode==eResponseCode){
-			if(responseCode==200){
+
+		int actualResponseCode = response.getStatusCode();
+		int expResponseCode = (int) Float.parseFloat(expectedResponseCode);
+
+		if (actualResponseCode == expResponseCode) {
+			if (actualResponseCode == 200) {
 				validateValidResponse(response);
-			}else if(responseCode==400||responseCode==499){
+			} else if (actualResponseCode == 400 || actualResponseCode == 499) {
 				validateErrorResponse(response);
-			}else{
-				// To-Do
+			} else {
+				logger.info("The response code does not fall in 200/400/499, " + actualResponseCode);
+				testFailed("The response code does not fall in 200/400/499, " + actualResponseCode);
 			}
-		}else{
-			// TO-DO : Fail the test and do the logging
-			System.out.println("Test Failed did not match. Expected response: "+responseCode+" Actual response: "+eResponseCode);
+		} else {	    
+			testFailed("Exp response: " + expResponseCode + " Act response: " + actualResponseCode);
+			logger.info("Exp response: " + expResponseCode + " Act response: " + actualResponseCode);
 		}
-
 	}
 
+
+	/**
+	 * When HTTP Response Code 200, use this method to validate the response
+	 * obtained against DB values.
+	 * 
+	 * @param response
+	 */
 	private void validateValidResponse(Response response) {
-		// TODO Auto-generated method stub
-		System.out.println("Valid response");	
-		System.out.println(response.asString());
+
+		// Fetching the JSON response
+		JsonPath json = response.getBody().jsonPath();
+
+		// Read the expected response values to be validated
+		String[] responseKeys = responseKeySet.split(",");
+
+		// TODO Validate against DB
+		for (int i = 0; i < responseKeys.length; i++) {
+			String key = responseKeys[i].trim();
+			String actualValue = json.getString(key);
+			System.out.println(key + "-----" + actualValue);
+		}
 	}
 
-	private void validateErrorResponse(Response response) {		
+
+	/**
+	 * When HTTP Response Code 400/499, use this method to validate the error
+	 * response obtained against the values in properties file.
+	 * 
+	 * @param response
+	 */
+	private void validateErrorResponse(Response response) {
 		// Fetching the JSON response
 		JsonPath json = response.getBody().jsonPath();
 
@@ -643,46 +205,188 @@ public class DriverScript extends TestBase {
 		// Read the expected response values to be validated
 		String[] responseKeys = responseKeySet.split(",");
 
-		// Validating the error response details 
-		for(int i=0;i<expValues.length;i++){			
-			String ActualValue = json.getString((responseKeys[i].trim()));
-			if(!expValues[i].equalsIgnoreCase(ActualValue)){
-				// TO-DO Logging and updating excel sheet
-				System.out.println("Test Failed : Expected : "+expValues[i]+" Actual : "+ActualValue);
+		// Validating the error response details
+		for (int count = 0; count < expValues.length; count++) {
+			String ActualValue = json.getString((responseKeys[count].trim()));
+			if (!expValues[count].equalsIgnoreCase(ActualValue)) {		
+				testFailed("Test Failed : Expected : " + expValues[count] + " Actual : " + ActualValue);
+				logger.info("Test Failed : Expected : " + expValues[count] + " Actual : " + ActualValue);
 			}
 		}
-	}	
+	}
 
+
+	/**
+	 * Get the json request defined in the Request.properties file
+	 * 
+	 * @param requestName
+	 * @return
+	 */
 	private String getRequestSchema(String requestName) {
 		return requestProp.getProperty(requestName);
 	}
 
-	private String generateValidRequest(String requestName, String params) {
-		String request = getRequestSchema(requestName);
-		HashMap<String, String> paramsMap = generateRequestParamsMap(params);
-		String finalRequest = formatRequestWithValues(request, paramsMap);
-		return finalRequest;
 
+	/**
+	 * Generates a valid json request from the json obatained from the
+	 * properties file. Uses the request parameters provided in the Excel sheet
+	 * to form a valid Json Request body.
+	 * 
+	 * @param requestName
+	 * @param requestParam
+	 * @return
+	 */
+	private String generateValidRequestBody(String requestName,
+			String requestParam) {
+		if (requestMethod.equalsIgnoreCase("POST")) {
+			String request = getRequestSchema(requestName);
+			HashMap<String, String> paramsMap = generateRequestParamsMap(requestParam);
+			String finalRequest = replaceRequestParameters(request, paramsMap);
+			return finalRequest.trim();
+		}
+		return null;
+	}
+
+
+	/**
+	 * Replace the place holder parameters in the URL with valid parameter values
+	 * obtained from excel sheet.
+	 * 
+	 * @param urlParams
+	 */
+	private void replaceURLParameters(String urlParams) {	
+		if(!urlParams.isEmpty()){
+			HashMap<String, String> paramsMap = generateRequestParamsMap(urlParams);
+			requestURL = replaceRequestParameters(requestURL, paramsMap);
+			writeURLToFile(requestURL);
+		}
+		
 	}
 	
+	private void writeURLToFile(String reqURL){
+		try {
+			FileUtil.createFile(fileoutpath, tcid + "_Url.txt", reqURL);
+		} catch (IOException e) {
+			//TODO
+		}
+	}
+
+
+	/**
+	 * Generates a map of key value parameters from a string in the format:
+	 * "key:value,key1:value1..." -->
+	 * 
+	 * @param params
+	 * @return
+	 */
 	private HashMap<String, String> generateRequestParamsMap(String params) {
 		HashMap<String, String> paramsMap = new HashMap<String, String>();
 		String[] paramSet = params.split(",");
 		for (int i = 0; i < paramSet.length; i++) {
 			String[] param = paramSet[i].split(":");
-			if(param[1].equalsIgnoreCase("null")){
-				param[1]="";
+			if (param[1].equalsIgnoreCase("null")) {
+				param[1] = "";
 			}
 			paramsMap.put(param[0].trim(), param[1].trim());
 		}
 		return paramsMap;
 	}
 
-	private String formatRequestWithValues(String request, HashMap<String, String> params) {
-		System.out.println(request);
+
+	/**
+	 * Replace the placeholder request parameters in the json request body with
+	 * the values in a HashMap.
+	 * 
+	 * @param requestBody
+	 * @param params
+	 * @return
+	 */
+	private String replaceRequestParameters(String requestBody, HashMap<String, String> params) {
 		for (Map.Entry<String, String> entry : params.entrySet()) {
-			request = request.replace(entry.getKey(), entry.getValue());
+			requestBody = requestBody.replace(entry.getKey(), entry.getValue());
 		}
-		return request;
+		return requestBody;
 	}
+
+
+	/**
+	 * Get the output filepath with timstamp as the last folder
+	 * in the folder structure. 
+	 * 
+	 * @return
+	 */
+	private String getFileOutPath(String timestamp) {
+		return System.getProperty("user.dir") + Constants.TEST_OUTPUT_PATH + "\\" + timestamp + "\\ ";
+	}
+
+	/**
+	 * Set the Test_Result column in excel sheet as Skipped.
+	 * 
+	 */
+	private void testSkipped() {
+		reader.setCellData(Constants.SHEET_NAME, Constants.COLUMN_TEST_RESULT, currentTestcase, Constants.TEST_SKIP);
+	}
+
+
+	/**
+	 * Set the Test_Result column in excel sheet as Passed.
+	 * 
+	 */
+	private void testPassed() {
+		reader.setCellData(Constants.SHEET_NAME, Constants.COLUMN_TEST_RESULT, currentTestcase, Constants.TEST_PASSED);
+	}
+
+
+	/**
+	 * Set the Test_Result column in excel sheet as Failed. And also sets the
+	 * failure cause in Failure_Cause column.
+	 * 
+	 */
+	private void testFailed(String failureCause) {
+		logger.info("Test Failed : " + failureCause);
+		reader.setCellData(Constants.SHEET_NAME, Constants.COLUMN_TEST_RESULT, currentTestcase, Constants.TEST_FAILED);
+		reader.setCellData(Constants.SHEET_NAME, Constants.COLUMN_FAILURE_CAUSE, currentTestcase, failureCause);
+		testFailed = true;
+	}
+}
+
+
+=======================================================================================================================
+
+
+package com.amex.utils;
+
+public class Constants {
+
+//public static final String URL 					   = "http://192.168.1.16:8080/EmployeeData";
+public static final String URL 					   = "https://dwww420.app.aexp.com";
+public static final String REQUEST_PROP_PATH       = "\\src\\com\\amex\\config\\request\\Request.properties";
+public static final String ERROR_CODES_PROP_PATH   = "\\src\\com\\amex\\config\\errorhandles\\ErrorCodes.properties";
+public static final String SHEET_NAME              = "Sheet1";
+public static final String TESTDATA_PATH           = "\\src\\com\\amex\\testdata\\API_Details.xlsx";
+public static final String CONTENT_TYPE_JSON       = "application/json";
+public static final String TEST_OUTPUT_PATH	       = "\\Test_Output_files";
+
+public static final String COLUMN_TCID	           = "TCID";
+public static final String COLUMN_API              = "API";
+public static final String COLUMN_HEADER_KEY       = "Header_Key";
+public static final String COLUMN_HEADER_VALUE     = "Header_Value";
+public static final String COLUMN_URL_PARAMETERS   = "Url_Parameters";
+public static final String COLUMN_REQUEST_NAME     = "Request_Name";
+public static final String COLUMN_REQUEST_PARAM    = "Request_Parameters";
+public static final String COLUMN_RESPONSE_CODE    = "Expected_Response_Code";
+public static final String COLUMN_REQUEST_METHOD   = "Request_Method";
+public static final String COLUMN_ERROR_NAME       = "Error_Name";
+public static final String COLUMN_RESPONSE_KEY     = "Response_Keys";
+public static final String COLUMN_RUN_MODE         = "Run_Mode";
+public static final String COLUMN_TEST_RESULT      = "Test_Result";
+public static final String COLUMN_FAILURE_CAUSE    = "Failure_Cause";
+
+public static final String TEST_SKIP               = "Skipped";
+public static final String TEST_PASSED             = "Passed";
+public static final String TEST_FAILED             = "Failed";
+
+
+
+
 }
