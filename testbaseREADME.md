@@ -1,33 +1,3 @@
-package com.amex.dataprovider;
-
-import java.util.HashMap;
-
-import org.testng.annotations.DataProvider;
-
-import com.amex.utils.Constants;
-import com.amex.utils.ExcelReader;
-import com.amex.utils.FileReader;
-
-public class RowDataProvider {
-    
-    private static ExcelReader reader;
-    
-    @DataProvider
-    public static Object[][] getRowData() {
-	reader = FileReader.getExcelReader(System.getProperty("user.dir") + Constants.TESTDATA_PATH);
-	Object[][] object =  new Object[reader.getRowCount(Constants.SHEET_NAME)-1][1];
-	for (int currentTestcase = 2; currentTestcase <= reader.getRowCount(Constants.SHEET_NAME); currentTestcase++) {
-	    HashMap<String, String> rowData = reader.getRowData(Constants.SHEET_NAME, currentTestcase);
-	    object[currentTestcase-2][0]=new RowDataWrapper(rowData);
-	}
-	return  object;
-    }
-}
-
-
-============================================================================================================================
-
-
 package com.amex.main;
 
 import java.io.IOException;
@@ -38,6 +8,8 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
+import org.testng.annotations.AfterSuite;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 import com.amex.base.TestBase;
@@ -46,6 +18,7 @@ import com.amex.dataprovider.RowDataWrapper;
 import com.amex.utils.Constants;
 import com.amex.utils.DB2Manager;
 import com.amex.utils.FileUtil;
+import com.amex.utils.ParamsUtil;
 import com.jayway.restassured.RestAssured;
 import com.jayway.restassured.path.json.JsonPath;
 import com.jayway.restassured.response.Response;
@@ -74,19 +47,23 @@ public class DriverScript extends TestBase {
     private static Logger logger = LoggerFactory.getLogger(DriverScript.class);
 
 
+    
+    @BeforeClass
+    public void init() {
+	FileUtil.createDirectory(Constants.TEST_OUTPUT_PATH);
+	fileoutpath = getFileOutPath(currentTimeStamp);
+	db2Manager  = new DB2Manager();
+    }
+
     /**
      * This method is the main method that starts the execution.
      * 
      * @throws IOException
      */
-
     @Test(dataProviderClass = RowDataProvider.class, dataProvider = "getRowData")
     public void test(RowDataWrapper rowDataWrapper) throws IOException {
-	//    	clearResults();
-	//    	logger.info("Test Execution started.");
-	//    
-	//    	for (currentTestcase = 2; currentTestcase <= reader.getRowCount(Constants.SHEET_NAME); currentTestcase++) {
-	//    		HashMap<String, String> rowData = reader.getRowData(Constants.SHEET_NAME, currentTestcase);
+
+	currentTestcase=rowDataWrapper.getCurrentTestcase();
 	HashMap<String, String> rowData = rowDataWrapper.getRowData();
 	String runMode = rowData.get(Constants.COLUMN_RUN_MODE).trim();
 	tcid = rowData.get(Constants.COLUMN_TCID).trim();
@@ -123,6 +100,7 @@ public class DriverScript extends TestBase {
 	logger.info("Clearing all the Test results from Excel sheet");
 	for (currentTestcase = 2; currentTestcase <= reader.getRowCount(Constants.SHEET_NAME); currentTestcase++) {
 	    reader.setCellData(Constants.SHEET_NAME, Constants.COLUMN_FAILURE_CAUSE, currentTestcase, "");
+	    reader.setCellData(Constants.SHEET_NAME, Constants.COLUMN_TEST_RESULT, currentTestcase, "");
 	}
 	testFailed = false;
     }
@@ -145,12 +123,9 @@ public class DriverScript extends TestBase {
 	requestBody          = generateValidRequestBody(requestName, requestParam);
 	errorName            = rowData.get(Constants.COLUMN_ERROR_NAME).trim();
 	responseKeySet       = rowData.get(Constants.COLUMN_RESPONSE_KEY).trim();
-	dbResultKeySet	= rowData.get(Constants.COLUMN_DB_RESULT_KEYS).trim();
-	fileoutpath	         = getFileOutPath(currentTimeStamp);
+	dbResultKeySet	     = rowData.get(Constants.COLUMN_DB_RESULT_KEYS).trim();
 	urlParameters        = rowData.get(Constants.COLUMN_URL_PARAMETERS).trim();
-	dbQueries	= rowData.get(Constants.COLUMN_DB_QUERIES).trim();
-	db2Manager 	= new DB2Manager();
-
+	dbQueries	     = rowData.get(Constants.COLUMN_DB_QUERIES).trim();
     }
 
 
@@ -208,7 +183,7 @@ public class DriverScript extends TestBase {
 	    }
 	} else {	    
 	    testFailed("Exp response: " + expResponseCode + " Act response: " + actualResponseCode);
-	    logger.info("Exp response: " + expResponseCode + " Act response: " + actualResponseCode);
+	    
 	}
     }
 
@@ -243,9 +218,8 @@ public class DriverScript extends TestBase {
 		}
 
 	    }
-	} catch (IOException e) {
-	    // TODO Auto-generated catch block
-	    e.printStackTrace();
+	} catch (Exception e) {
+	    testFailed(e.getMessage());
 	}
     }
 
@@ -301,8 +275,7 @@ public class DriverScript extends TestBase {
 	    String requestParam) {
 	if (requestMethod.equalsIgnoreCase("POST")) {
 	    String request = getRequestSchema(requestName);
-	    HashMap<String, String> paramsMap = generateRequestParamsMap(requestParam);
-	    String finalRequest = replaceRequestParameters(request, paramsMap);
+	    String finalRequest = ParamsUtil.replaceParams(request, requestParam);
 	    return finalRequest.trim();
 	}
 	return null;
@@ -317,8 +290,7 @@ public class DriverScript extends TestBase {
      */
     private void replaceURLParameters(String urlParams) {	
 	if(!urlParams.isEmpty()){
-	    HashMap<String, String> paramsMap = generateRequestParamsMap(urlParams);
-	    requestURL = replaceRequestParameters(requestURL, paramsMap);
+	    requestURL = ParamsUtil.replaceParams(requestURL, urlParams);
 	    writeURLToFile(requestURL);
 	}
 
@@ -332,44 +304,6 @@ public class DriverScript extends TestBase {
 	}
     }
 
-
-    /**
-     * Generates a map of key value parameters from a string in the format:
-     * "key:value,key1:value1..." -->
-     * 
-     * @param params
-     * @return
-     */
-    private HashMap<String, String> generateRequestParamsMap(String params) {
-	HashMap<String, String> paramsMap = new HashMap<String, String>();
-	String[] paramSet = params.split(",");
-	for (int i = 0; i < paramSet.length; i++) {
-	    String[] param = paramSet[i].split(":");
-	    if (param[1].equalsIgnoreCase("null")) {
-		param[1] = "";
-	    }
-	    paramsMap.put(param[0].trim(), param[1].trim());
-	}
-	return paramsMap;
-    }
-
-
-    /**
-     * Replace the placeholder request parameters in the json request body with
-     * the values in a HashMap.
-     * 
-     * @param requestBody
-     * @param params
-     * @return
-     */
-    private String replaceRequestParameters(String requestBody, HashMap<String, String> params) {
-	for (Map.Entry<String, String> entry : params.entrySet()) {
-	    requestBody = requestBody.replace(entry.getKey(), entry.getValue());
-	}
-	return requestBody;
-    }
-
-
     /**
      * Get the output filepath with timstamp as the last folder
      * in the folder structure. 
@@ -377,7 +311,7 @@ public class DriverScript extends TestBase {
      * @return
      */
     private String getFileOutPath(String timestamp) {
-	return System.getProperty("user.dir") + Constants.TEST_OUTPUT_PATH + "\\" + timestamp + "\\ ";
+	return Constants.TEST_OUTPUT_PATH + "\\" + timestamp + "\\";
     }
 
     /**
@@ -408,12 +342,172 @@ public class DriverScript extends TestBase {
 	reader.setCellData(Constants.SHEET_NAME, Constants.COLUMN_TEST_RESULT, currentTestcase, Constants.TEST_FAILED);
 	reader.setCellData(Constants.SHEET_NAME, Constants.COLUMN_FAILURE_CAUSE, currentTestcase, failureCause);
 	testFailed = true;
+	Assert.fail("Test Failed : " + failureCause);
     }
+    
+
+    @AfterSuite
+    public void tearDown() {
+	try {
+	    FileUtil.copyFile(Constants.TESTDATA_PATH, fileoutpath + Constants.EXCEL_TEST_REPORT_PATH);
+	    clearResults();
+	} catch (IOException e) {
+	    logger.info(e.getMessage(), e);
+	}
+    }
+}
+===================================================================================================================
+
+
+package com.amex.utils;
+
+public class Constants {
+
+//public static final String URL 					   = "http://192.168.1.3:8080/EmployeeData";
+public static final String URL 			   = "https://dwww420.app.aexp.com/merchant/services/disputes";
+public static final String REQUEST_PROP_PATH       = "src\\com\\amex\\config\\request\\Request.properties";
+public static final String ERROR_CODES_PROP_PATH   = "src\\com\\amex\\config\\errorhandles\\ErrorCodes.properties";
+public static final String SQL_QUERIES_PROP_PATH   = "src\\com\\amex\\config\\request\\sql_queries.properties";
+public static final String SHEET_NAME              = "Sheet1";
+public static final String TESTDATA_PATH           = "src\\com\\amex\\testdata\\API_Details.xlsx";
+public static final String EXCEL_TEST_REPORT_PATH  = "\\API_Report.xlsx";
+public static final String CONTENT_TYPE_JSON       = "application/json";
+public static final String TEST_OUTPUT_PATH	   = "Test_Output_files";
+
+public static final String COLUMN_TCID	           = "TCID";
+public static final String COLUMN_API              = "API";
+public static final String COLUMN_HEADER_KEY       = "Header_Key";
+public static final String COLUMN_HEADER_VALUE     = "Header_Value";
+public static final String COLUMN_URL_PARAMETERS   = "Url_Parameters";
+public static final String COLUMN_REQUEST_NAME     = "Request_Name";
+public static final String COLUMN_REQUEST_PARAM    = "Request_Parameters";
+public static final String COLUMN_RESPONSE_CODE    = "Expected_Response_Code";
+public static final String COLUMN_REQUEST_METHOD   = "Request_Method";
+public static final String COLUMN_ERROR_NAME       = "Error_Name";
+public static final String COLUMN_RESPONSE_KEY     = "Response_Keys";
+public static final String COLUMN_RUN_MODE         = "Run_Mode";
+public static final String COLUMN_TEST_RESULT      = "Test_Result";
+public static final String COLUMN_FAILURE_CAUSE    = "Failure_Cause";
+public static final String COLUMN_DB_QUERIES       = "DB_Queries";
+public static final String COLUMN_DB_RESULT_KEYS   = "DB_Result_Keys";
+
+public static final String TEST_SKIP               = "Skipped";
+public static final String TEST_PASSED             = "Passed";
+public static final String TEST_FAILED             = "Failed";
+
+
+public static final String JDBC_DRVER_DB2          = "COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver";
+public static final String JDBC_CONNECTION_URL	   = "jdbc:db2://ccccc:7320/cccc";
+public static final String DB_USER                 = "*";
+public static final String DB_PASS                 = "*****";
+
 }
 
 
-=========================================================================================================================
+================================================================================
 
+
+
+package com.amex.base;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.Properties;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.testng.annotations.BeforeSuite;
+
+import com.amex.utils.Constants;
+import com.amex.utils.DateTimeUtil;
+import com.amex.utils.ExcelReader;
+import com.amex.utils.FileReader;
+
+public class TestBase {
+    protected static ExcelReader reader;
+    protected Properties requestProp;
+    protected Properties errorCodesProp;
+    protected String currentTimeStamp;
+    private static Logger logger = LoggerFactory.getLogger(TestBase.class);
+
+    @BeforeSuite
+    public void setUp() throws IOException {
+	logger.info("Loading all the required files");
+
+	// Loading Request property file
+	requestProp = loadPropertyFile(Constants.REQUEST_PROP_PATH);
+
+	// Loading Error Codes property file
+	errorCodesProp = loadPropertyFile(Constants.ERROR_CODES_PROP_PATH);
+
+	// Loading the Test data excel sheet
+	reader = FileReader.getExcelReader(Constants.TESTDATA_PATH);
+
+	currentTimeStamp = DateTimeUtil.getCurrentTimeStamp();
+    }
+    
+   
+
+    /**
+     * Loads the property file from the path provided and returns a Property
+     * object
+     * 
+     * @param path
+     * @return
+     */
+    private Properties loadPropertyFile(String path) {
+	logger.info("Loading the property file : " + path);
+	Properties prop = new Properties();
+	FileInputStream fis = null;
+
+	try {
+	    fis = new FileInputStream(path);
+	    prop.load(fis);
+	} catch (FileNotFoundException e) {
+	    logger.info(e.getMessage(), e);
+	} catch (IOException e) {
+	    logger.info(e.getMessage(), e);
+	} finally {
+	    if (fis != null) {
+		try {
+		    fis.close();
+		} catch (IOException e) {
+		    e.printStackTrace();
+		}
+	    }
+	}
+
+	return prop;
+    }
+}
+=======================================================================
+
+package com.amex.dataprovider;
+
+import java.util.HashMap;
+
+import org.testng.annotations.DataProvider;
+
+import com.amex.base.TestBase;
+import com.amex.utils.Constants;
+
+public class RowDataProvider extends TestBase{
+    
+    
+    @DataProvider
+    public static Object[][] getRowData() {
+	Object[][] object =  new Object[reader.getRowCount(Constants.SHEET_NAME)-1][1];
+	for (int currentTestcase = 2; currentTestcase <= reader.getRowCount(Constants.SHEET_NAME); currentTestcase++) {
+	    
+	    HashMap<String, String> rowData = reader.getRowData(Constants.SHEET_NAME, currentTestcase);
+	    object[currentTestcase-2][0]=new RowDataWrapper(rowData,currentTestcase);
+	}
+	return  object;
+    }
+}
+
+=================================================================================
 
 
 package com.amex.dataprovider;
@@ -424,15 +518,21 @@ import com.amex.utils.Constants;
 
 public class RowDataWrapper {
     private HashMap<String, String> rowData;
+    private int currentTestcase;
 
-    public RowDataWrapper(HashMap<String, String> rowData) {
-	this.rowData =rowData;
+    public RowDataWrapper(HashMap<String, String> rowData, int currentTestcase) {
+	this.rowData = rowData;
+	this.currentTestcase = currentTestcase;
     }
 
     public HashMap<String, String> getRowData() {
 	return rowData;
-    } 
+    }
     
+    public int getCurrentTestcase() {
+	return currentTestcase;
+    }
+
     public String toString() {
 	return rowData.get(Constants.COLUMN_TCID).trim();
     }
@@ -440,33 +540,358 @@ public class RowDataWrapper {
 
 
 
-========================================================================================================================
+=====================================================================================
 
 
-GUID=select GLBL_USER_ID from OD1.TC391_USER where FIRST_NM \= '_first_nm' and LST_NM \= '_lst_nm'
+package com.amex.utils;
 
-# Queries for summary count 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
-SQLQuery1=select  count(*) as "activeDisputes" from P65.GLBL_CASE_STA WHERE DERIV_CASE_STA_NM IN ('In Progress','Urgent Response Required','Response Required') and  SE_NO IN ('_SENO')
-Params1=_SENO:6993620004
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-SQLQuery2=select count(*) as "chargeback" from P65.GLBL_CASE_STA WHERE CASE_STAGE_CD='C' and DERIV_CASE_STA_NM IN ('Responded Offline','In Progress','Urgent Response Required','Response Required') and  SE_NO IN ('_SENO')
-Params2=_SENO:6993620004
+public class DB2Manager {
 
-SQLQuery3=select count(*) as "recentUpdates" from P65.GLBL_CASE_STA WHERE DERIV_CASE_STA_NM IN ('Closed Chargeback','Closed in your favor') and  SE_NO IN ('_SENO')
-Params3=_SENO:6993620004
+    private static DbReader dbReader = null;
+    protected Properties requestProp;
+    private static Logger logger = LoggerFactory.getLogger(DB2Manager.class);
+    
+    public DB2Manager() {
+	dbReader = DbReader.getInstance(Constants.JDBC_DRVER_DB2, Constants.JDBC_CONNECTION_URL, Constants.DB_USER, Constants.DB_PASS);
+    }
+    
+    
+    public List<Map<String,String>> executeQueries(List<String> queries) {
+	Iterator<String> queriesIt = queries.iterator();
+	List<Map<String,String>> resultList = new ArrayList<Map<String,String>>();
+	while(queriesIt.hasNext()) {
+	    String query = queriesIt.next();
+	    List<Map<String,String>> results = dbReader.executeQuery(query);
+	    resultList.addAll(results);
+	}
+	logger.info(resultList.toString());
+	return resultList;
+    }
+    
+    
+    public String getItemValue(List<Map<String,String>> resultList, String key) {
+	Iterator<Map<String, String>> resultsIt = resultList.iterator();
+	while (resultsIt.hasNext()) {
+	    Map<String, String> resultMap = resultsIt.next();
+	    for (Map.Entry<String, String> entry : resultMap.entrySet()) {
+		if (entry.getKey().equals(key)) {
+		    return entry.getValue();
+		}
+	    }
+	}
+	return null;
+    }
 
-SQLQuery4=select count(*) as "recentlyClosed" from P65.GLBL_CASE_STA WHERE DERIV_CASE_STA_NM IN ('Closed Status','Closed Chargeback','Closed in your favor') and  SE_NO IN ('_SENO')
-Params4=_SENO:6993620004
+    
+    public List<String> getQueries(String dbQueries) throws IOException {
+	requestProp = new Properties();
+	FileInputStream fis = new FileInputStream(Constants.SQL_QUERIES_PROP_PATH);
+	requestProp.load(fis);
+	List<String> allQueries = new ArrayList<String>();
+	String[] queryKeyValues = dbQueries.split(",");
+	for (String queryKeyValue : queryKeyValues) {
 
-SQLQuery5=select count(*) as "responseRequired" from P65.GLBL_CASE_STA WHERE DERIV_CASE_STA_NM IN ('Urgent Response Required','Response Required') and  SE_NO IN ('_SENO')
-Params5=_SENO:6993620004
+	    queryKeyValue = queryKeyValue.trim();
+	    if (!queryKeyValue.isEmpty()) {
+		String[] keyValue = queryKeyValue.split(":");
+		String query1 = requestProp.getProperty(keyValue[0]);
+		String param1 = requestProp.getProperty(keyValue[1]);
+		if (param1 != null) {
+		    query1 = ParamsUtil.replaceParams(query1, param1);
+		}
+		allQueries.add(query1);
+		logger.info(query1);
+	    }
 
-SQLQuery6=select count(*) as "inProgress" from P65.GLBL_CASE_STA WHERE DERIV_CASE_STA_NM IN ('In Progress','Responded Offline') and  SE_NO IN ('_SENO')
-Params6=_SENO:6993620004
+	}
+	return allQueries;
+    }
+}
 
-SQLQuery7=select count(*) as "closedInFavor" from P65.GLBL_CASE_STA WHERE DERIV_CASE_STA_NM IN ('Closed in your favor') and  SE_NO IN ('_SENO')
-Params7=_SENO:6993620004
 
-SQLQuery8=select count(*) as "closedChargebacks" from P65.GLBL_CASE_STA WHERE DERIV_CASE_STA_NM IN ('Closed Chargeback', 'Closed status') and SE_NO IN ('_SENO')
-Params8=_SENO:6993620004
+===========================================================================================
+
+
+package com.amex.utils;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * 
+ */
+public class DbReader {
+
+    private Connection connection = null;
+    private ResultSet resultSet = null;
+    private PreparedStatement preparedStatement = null;
+    private ResultSetMetaData resultSetMetaData = null;
+
+    private static Logger logger = LoggerFactory.getLogger(DbReader.class);
+
+    /**
+     * This method is used get the database connection
+     * 
+     * @param driver
+     * @param url
+     * @param userName
+     * @param password
+     * 
+     */
+    public DbReader(String driver, String url, String userName,
+	    String password) {
+	try {
+	    logger.info(" Trying to connect database");
+	    Class.forName(driver);
+	    connection = DriverManager.getConnection(url, userName, password);
+	    connection.setAutoCommit(false);
+	} catch (Exception e) {
+	    logger.info(e.getMessage(),e);
+	}
+    }
+    
+    public List<Map<String,String>> executeQuery(String query) {
+	try {
+	    preparedStatement = connection.prepareStatement(query);
+	
+	    resultSet = preparedStatement.executeQuery();
+	    resultSetMetaData = resultSet.getMetaData();
+	    
+	} catch (SQLException e) {
+	    // TODO Auto-generated catch block
+	    logger.info(e.getMessage(), e);
+	}
+	return read();
+    }
+    
+
+    private static volatile DbReader instance = null;
+
+    /**
+     * This method create the instance of DbReader
+     * 
+     * @param driver
+     * @param url
+     * @param userName
+     * @param password
+     * @return DbReader
+     */
+    public static DbReader getInstance(String driver, String url,
+	    String userName, String password) {
+	logger.info(" Trying to create instance for DB");
+	if (instance == null) {
+	    synchronized (DbReader.class) {
+		if (instance == null) {
+		    instance = new DbReader(driver, url, userName, password);
+		}
+	    }
+	}
+	return instance;
+    }
+
+    /**
+     * This method read the data from database
+     * 
+     * @return List of map objects
+     */
+    private List<Map<String, String>> read() {
+	logger.debug(" inside read() method");
+	List<Map<String, String>> maplist = null;
+	try {
+	    int colCount = resultSetMetaData.getColumnCount();
+	    
+	    maplist = new ArrayList<Map<String, String>>();
+	    while (resultSet.next()) {
+		Map<String, String> map = new HashMap<String, String>();
+		for (int i = 1; i <= colCount; i++) {
+		    map.put(resultSetMetaData.getColumnName(i).trim(),
+			    resultSet.getString(i).trim());
+		}
+		maplist.add(map);
+	    }
+	} catch (Exception e) {
+	    logger.info(e.getMessage(),e);
+	} finally {
+	    try {
+		resultSet.close();
+		
+	    } catch (SQLException e) {
+		if (e.getMessage() != null && e.getMessage().isEmpty()) {
+		    logger.error(e.getMessage());
+		} else {
+		    logger.error(" Problem occured while getting data from db");
+		}
+	    }
+
+	}
+	return maplist;
+    }
+}
+
+
+
+=======================================================================================================
+
+
+package com.amex.utils;
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class FileUtil {
+    private static Logger logger = LoggerFactory.getLogger(FileUtil.class);
+
+    public static void createFile(String filepath, String fileName, String content) throws IOException {
+	try {
+
+	    if (createDirectory(filepath)) {
+		File file = new File(filepath + fileName);
+		file.createNewFile();
+
+		FileWriter fw = new FileWriter(file.getAbsoluteFile());
+		BufferedWriter bw = new BufferedWriter(fw);
+		bw.write(content);
+		bw.close();
+
+		logger.info("Directory/File is created!" + filepath + " "
+			+ fileName);
+
+	    }
+
+	} catch (Exception e) {
+	    logger.info(e.getMessage(),e);
+	}
+
+    }
+
+    public static boolean createDirectory(String path) {
+	File file = new File(path);
+	if (!file.exists()) {
+	    if (file.mkdirs()) {
+		return true;
+	    }
+	} else {
+	    return true;
+	}
+	return false;
+    }
+
+    public static void copyFile(String sourcePath, String destPath) throws IOException {
+
+	File source = new File(sourcePath);
+	File dest = new File(destPath);
+	InputStream input = null;
+	OutputStream output = null;
+	try {
+	    input = new FileInputStream(source);
+	    output = new FileOutputStream(dest);
+	    byte[] buf = new byte[1024];
+	    int bytesRead;
+	    while ((bytesRead = input.read(buf)) > 0) {
+		output.write(buf, 0, bytesRead);
+	    }
+	} catch (Exception e) {
+	    logger.info(e.getMessage(), e);
+	} finally {
+	    input.close();
+	    output.close();
+	}
+    }
+
+}
+
+
+===================================================================================================
+
+
+package com.amex.utils;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class ParamsUtil {
+
+    /**
+     * Generates a map of key value parameters from a string in the format:
+     * "key:value,key1:value1..." -->
+     * 
+     * @param params
+     * @return
+     */
+    private HashMap<String, String> generateRequestParamsMap(String params) {
+	HashMap<String, String> paramsMap = new HashMap<String, String>();
+	String[] paramSet = params.split(",");
+	for (int i = 0; i < paramSet.length; i++) {
+	    String[] param = paramSet[i].split(":");
+	    if (param[1].equalsIgnoreCase("null")) {
+		param[1] = "";
+	    }
+	    paramsMap.put(param[0].trim(), param[1].trim());
+	}
+	return paramsMap;
+    }
+
+    /**
+     * Replace the placeholder request parameters in the json request body with
+     * the values in a HashMap.
+     * 
+     * @param requestBody
+     * @param params
+     * @return
+     */
+    private String replaceRequestParameters(String requestBody, HashMap<String, String> params) {
+	for (Map.Entry<String, String> entry : params.entrySet()) {
+	    requestBody = requestBody.replace(entry.getKey(), entry.getValue());
+	}
+	return requestBody;
+    }
+
+    /**
+     * Replaces the params in a string with corresponding values provided in the 
+     * keyvalueparams in the form "_key: value,_key1:value1"
+     * 
+     * @param requestBody
+     * @param keyvalueparams
+     * @return
+     */
+    public static String replaceParams(String requestBody, String keyvalueparams) {
+	ParamsUtil putils = new ParamsUtil();
+	HashMap<String, String> params = putils
+		.generateRequestParamsMap(keyvalueparams);
+	return putils.replaceRequestParameters(requestBody, params);
+    }
+}
+
+
+
